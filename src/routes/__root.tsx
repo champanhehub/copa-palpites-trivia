@@ -77,9 +77,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Copa Palpites — Bolão & Trivia" },
+      { title: "Me dá minha Copa!" },
       { name: "description", content: "Dê seus palpites nos jogos da Copa, responda a trivia e suba no ranking." },
-      { property: "og:title", content: "Copa Palpites" },
+      { property: "og:title", content: "Me dá minha Copa!" },
       { property: "og:description", content: "Bolão da Copa + trivia diária." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

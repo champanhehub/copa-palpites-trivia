@@ -16,84 +16,43 @@ export type TriviaAnswer = {
 export type Player = {
   email: string;
   name: string;
+  avatarUrl?: string | null;
   predictions: Record<string, Prediction>;
   trivia: Record<string, TriviaAnswer>;
 };
 
-type DB = {
-  currentEmail: string | null;
-  players: Record<string, Player>;
-};
+const SESSION_KEY = "copa-session-v2";
 
-const KEY = "copa-palpites-v1";
+type SessionData = { email: string; token: string };
 
-function load(): DB {
-  if (typeof window === "undefined") return { currentEmail: null, players: {} };
+function readSession(): SessionData | null {
+  if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { currentEmail: null, players: {} };
-    return JSON.parse(raw) as DB;
+    return JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null");
   } catch {
-    return { currentEmail: null, players: {} };
+    return null;
   }
 }
 
-function save(db: DB) {
-  localStorage.setItem(KEY, JSON.stringify(db));
-}
-
-export const store = {
-  get: load,
-  save,
-  login(name: string, email: string): Player {
-    const db = load();
-    const key = email.trim().toLowerCase();
-    const existing = db.players[key];
-    const player: Player =
-      existing ?? { email: key, name: name.trim(), predictions: {}, trivia: {} };
-    if (existing && name.trim() && existing.name !== name.trim()) {
-      player.name = name.trim();
-    }
-    db.players[key] = player;
-    db.currentEmail = key;
-    save(db);
-    return player;
+export const session = {
+  get(): SessionData | null {
+    return readSession();
   },
-  logout() {
-    const db = load();
-    db.currentEmail = null;
-    save(db);
+  getEmail(): string | null {
+    return readSession()?.email ?? null;
   },
-  currentPlayer(): Player | null {
-    const db = load();
-    if (!db.currentEmail) return null;
-    return db.players[db.currentEmail] ?? null;
+  set(email: string, token: string) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ email, token }));
   },
-  submitPrediction(matchId: string, home: number, away: number) {
-    const db = load();
-    if (!db.currentEmail) return;
-    const p = db.players[db.currentEmail];
-    if (p.predictions[matchId]) return; // locked
-    p.predictions[matchId] = { matchId, home, away, createdAt: Date.now() };
-    save(db);
-  },
-  submitTrivia(triviaId: string, optionIndex: number) {
-    const db = load();
-    if (!db.currentEmail) return;
-    const p = db.players[db.currentEmail];
-    if (p.trivia[triviaId]) return;
-    p.trivia[triviaId] = { triviaId, optionIndex, createdAt: Date.now() };
-    save(db);
-  },
-  allPlayers(): Player[] {
-    return Object.values(load().players);
+  clear() {
+    localStorage.removeItem(SESSION_KEY);
   },
 };
 
 export function scoreForMatch(pred: Prediction | undefined, match: Match): number {
   if (!pred || !match.result) return 0;
   const exact = pred.home === match.result.home && pred.away === match.result.away;
-  if (exact) return 5;
+  if (exact) return 3;
   const predWinner =
     pred.home === pred.away ? "draw" : pred.home > pred.away ? "home" : "away";
   const realWinner =
@@ -102,20 +61,25 @@ export function scoreForMatch(pred: Prediction | undefined, match: Match): numbe
       : match.result.home > match.result.away
         ? "home"
         : "away";
-  return predWinner === realWinner ? 2 : 0;
+  if (predWinner !== realWinner) return 0;
+  return realWinner === "draw" ? 1 : 2;
 }
 
-export function playerScore(player: Player): {
+export function playerScore(
+  player: Player,
+  matches: typeof MATCHES = MATCHES,
+  triviaList: typeof TRIVIA = TRIVIA,
+): {
   total: number;
   matchPts: number;
   triviaPts: number;
 } {
   let matchPts = 0;
-  for (const m of MATCHES) {
+  for (const m of matches) {
     matchPts += scoreForMatch(player.predictions[m.id], m);
   }
   let triviaPts = 0;
-  for (const t of TRIVIA) {
+  for (const t of triviaList) {
     const ans = player.trivia[t.id];
     if (ans && ans.optionIndex === t.answerIndex) triviaPts += 1;
   }
@@ -123,5 +87,6 @@ export function playerScore(player: Player): {
 }
 
 export function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  // Usa data em BRT (UTC-3) para coincidir com os horários dos jogos
+  return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
